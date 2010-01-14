@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009  Michael Novak <mike@androidnerds.org>
+ * Copyright (C) 2009, 2010  Michael Novak <mike@androidnerds.org>
  * 
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -17,7 +17,7 @@
  */
 package com.michaelrnovak.util.logger;
 
-import android.app.Activity;
+import android.app.ListActivity;
 import android.app.AlertDialog;
 import android.app.Dialog;
 import android.app.ProgressDialog;
@@ -43,8 +43,10 @@ import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewGroup.LayoutParams;
+import android.widget.BaseAdapter;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.ListView;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -53,14 +55,15 @@ import com.michaelrnovak.util.logger.service.ILogProcessor;
 import com.michaelrnovak.util.logger.service.LogProcessor;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.HashMap;
 
-public class Logger extends Activity {
+public class Logger extends ListActivity {
 	private ILogProcessor mService;
-	private ScrollView mScrollView;
-	private LinearLayout mLines;
 	private AlertDialog mDialog;
 	private ProgressDialog mProgressDialog;
+	private LoggerListAdapter mAdapter;
+	private LayoutInflater mInflater;
 	private int mFilter = -1;
 	private int mBuffer = 0;
 	private int mLogType = 0;
@@ -90,9 +93,12 @@ public class Logger extends Activity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.main);
         
-        mScrollView = (ScrollView) findViewById(R.id.scrollView);
-        mLines = (LinearLayout) findViewById(R.id.lines);
-        
+		getListView().setStackFromBottom(true);
+		getListView().setTranscriptMode(ListView.TRANSCRIPT_MODE_ALWAYS_SCROLL);
+		getListView().setDividerHeight(0);
+		
+        mAdapter = new LoggerListAdapter(this);
+		setListAdapter(mAdapter);
     }
     
     @Override
@@ -312,48 +318,8 @@ public class Logger extends Activity {
     	}
     }
     
-    private void handleLogMessage(String line) {
-    	if (mFilter != -1 && line.charAt(0) != mFilters[mFilter]) {
-    		return;
-    	}
-    	
-    	if (!mFilterTag.equals("")) {
-    		String tag = line.substring(2, line.indexOf("("));
-    		
-    		if (!mFilterTag.toLowerCase().equals(tag.toLowerCase().trim())) {
-    			return;
-    		}
-    	}
-    	
-    	TextView lineView = new TextView(this);
-    	lineView.setTypeface(Typeface.MONOSPACE);
-    	
-    	if (mLogType == 0) {
-    		lineView.setText(new LogFormattedString(line));
-    	} else {
-    		lineView.setText(line);
-    	}
-    	
-    	final boolean autoscroll = 
-            (mScrollView.getScrollY() + mScrollView.getHeight() >= mLines.getBottom()) ? true : false;
-    	
-    	mLines.addView(lineView, new LayoutParams(LayoutParams.FILL_PARENT, LayoutParams.WRAP_CONTENT));
-    	
-    	if (mLines.getChildCount() > MAX_LINES) {
-    		mLines.removeViewAt(0);
-    	}
-    	
-    	mScrollView.post(new Runnable() {
-    		public void run() {
-    			if (autoscroll == true) {
-    				mScrollView.scrollTo(0, mLines.getBottom() - mScrollView.getHeight());
-    			}
-    		}
-    	});
-    }
-    
     private void updateFilter() {
-    	mLines.removeAllViews();
+    	mAdapter.resetLines();
     	
     	try {
     		mService.reset(buffers[mBuffer].toString());
@@ -365,7 +331,7 @@ public class Logger extends Activity {
     }
     
     private void updateBuffer() {
-    	mLines.removeAllViews();
+    	mAdapter.resetLines();
     	
     	try {
     		mService.reset(buffers[mBuffer].toString());
@@ -377,7 +343,7 @@ public class Logger extends Activity {
     }
     
     private void updateLog() {
-    	mLines.removeAllViews();
+    	mAdapter.resetLines();
     	
     	try {
     		mService.restart(mLogType);
@@ -389,7 +355,7 @@ public class Logger extends Activity {
     }
     
     private void updateFilterTag() {
-    	mLines.removeAllViews();
+    	mAdapter.resetLines();
     	
     	try {
     		mService.reset(buffers[mBuffer].toString());
@@ -437,7 +403,7 @@ public class Logger extends Activity {
     			Log.d("Logger", "MSG_LOG_FAIL");
     			break;
     		case LogProcessor.MSG_NEW_LINE:
-    			handleLogMessage((String) msg.obj);
+    			mAdapter.addLine((String) msg.obj);
     			break;
     		case LogProcessor.MSG_LOG_SAVE:
     			saveResult((String) msg.obj);
@@ -466,6 +432,85 @@ public class Logger extends Activity {
 			mService = null;
 		}
 	};
+	
+	/*
+	 * This is the list adapter for the Logger, it holds an array of strings and adds them
+	 * to the list view recycling views for obvious performance reasons.
+	 */
+	public class LoggerListAdapter extends BaseAdapter {
+		
+		private Context mContext;
+		private ArrayList<String> mLines;
+		
+		public LoggerListAdapter(Context c) {
+			mContext = c;
+			mLines = new ArrayList<String>();
+			mInflater = (LayoutInflater) c.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
+		}
+		
+		public int getCount() {
+			return mLines.size();
+		}
+		
+		public long getItemId(int pos) {
+			return pos;
+		}
+		
+		public Object getItem(int pos) {
+			return mLines.get(pos);
+		}
+		
+		public View getView(int pos, View convertView, ViewGroup parent) {
+			TextView holder;
+			String line = mLines.get(pos);
+			
+			if (convertView == null) {
+				//inflate the view here because there's no existing view object.
+				convertView = mInflater.inflate(R.layout.log_item, parent, false);
+				
+				holder = (TextView) convertView.findViewById(R.id.log_line);
+				holder.setTypeface(Typeface.MONOSPACE);
+				
+				convertView.setTag(holder);
+			} else {
+				holder = (TextView) convertView.getTag();
+			}
+
+	    	if (mLogType == 0) {
+	    		holder.setText(new LogFormattedString(line));
+	    	} else {
+	    		holder.setText(line);
+	    	}
+	
+			return convertView;
+		}
+		
+		public void addLine(String line) {
+			if (mFilter != -1 && line.charAt(0) != mFilters[mFilter]) {
+	    		return;
+	    	}
+
+	    	if (!mFilterTag.equals("")) {
+	    		String tag = line.substring(2, line.indexOf("("));
+
+	    		if (!mFilterTag.toLowerCase().equals(tag.toLowerCase().trim())) {
+	    			return;
+	    		}
+	    	}
+	
+			mLines.add(line);
+			notifyDataSetChanged();
+		}
+		
+		public void resetLines() {
+			mLines.clear();
+			notifyDataSetChanged();
+		}
+		
+		public void updateView() {
+			notifyDataSetChanged();
+		}
+	}
     
     private static class LogFormattedString extends SpannableString {
     	public static final HashMap<Character, Integer> LABEL_COLOR_MAP;
