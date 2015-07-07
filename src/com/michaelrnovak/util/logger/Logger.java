@@ -60,6 +60,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 
 public class Logger extends ListActivity {
+    public static final String TAG = "Logger";
+
     private ILogProcessor mService;
     private AlertDialog mDialog;
     private ProgressDialog mProgressDialog;
@@ -69,6 +71,7 @@ public class Logger extends ListActivity {
     private int mBuffer = 0;
     private int mLogType = 0;
     private String mFilterTag = "";
+    private String mFilterTagLowerCase = "";
     private boolean mServiceRunning = false;
     public static int MAX_LINES = 250;
     public static final int DIALOG_FILTER_ID = 1;
@@ -88,7 +91,7 @@ public class Logger extends ListActivity {
     final char[] mFilters = {'V', 'D', 'I', 'W', 'E', 'F', 'S'};
     final CharSequence[] buffers = {"Main", "Radio", "Events"};
     final CharSequence[] types = {"Logcat", "Dmesg"};
-	
+
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -101,7 +104,7 @@ public class Logger extends ListActivity {
         mAdapter = new LoggerListAdapter(this);
         setListAdapter(mAdapter);
     }
-    
+
     @Override
     public void onResume() {
         super.onResume();
@@ -259,12 +262,12 @@ public class Logger extends ListActivity {
             if (which == -1) {
                 EditText et = (EditText) mDialog.findViewById(R.id.filename);
                 onCreateDialog(DIALOG_SAVE_PROGRESS_ID);
-                Log.d("Logger", "Filename: " + et.getText().toString());
+                Log.d(TAG, "Filename: " + et.getText().toString());
 
                 try {
                     mService.write(et.getText().toString(), mFilterTag);
                 } catch (RemoteException e) {
-                    Log.e("Logger", "Trouble writing the log to a file");
+                    Log.e(TAG, "Trouble writing the log to a file");
                 }
             }
         }
@@ -275,11 +278,13 @@ public class Logger extends ListActivity {
             if (which == -1) {
                 EditText et = (EditText) mDialog.findViewById(R.id.filename);
                 mFilterTag = et.getText().toString().trim();
+                mFilterTagLowerCase = mFilterTag.toLowerCase();
                 updateFilterTag();
             } else {
                 EditText et = (EditText) mDialog.findViewById(R.id.filename);
                 et.setText("");
                 mFilterTag = "";
+                mFilterTagLowerCase = "";
                 updateFilterTag();
             }
         }
@@ -290,7 +295,7 @@ public class Logger extends ListActivity {
         mServiceRunning = false;
 
         if (mServiceRunning) {
-            Log.d("Logger", "mServiceRunning is still TRUE");
+            Log.d(TAG, "mServiceRunning is still TRUE");
         }
     }
 
@@ -301,32 +306,29 @@ public class Logger extends ListActivity {
             mService.run(mLogType);
             mServiceRunning = true;
         } catch (RemoteException e) {
-            Log.e("Logger", "Could not start logging");
+            Log.e(TAG, "Could not start logging");
         }
+    }
+
+    private void reset() {
+        mAdapter.resetLines();
+
+        try {
+            mService.reset(buffers[mBuffer].toString());
+        } catch (RemoteException e) {
+            Log.e(TAG, "Service is gone...");
+        }
+
+        mDialog.dismiss();
+
     }
 
     private void updateFilter() {
-        mAdapter.resetLines();
-
-        try {
-            mService.reset(buffers[mBuffer].toString());
-        } catch (RemoteException e) {
-            Log.e("Logger", "Service is gone...");
-        }
-
-        mDialog.dismiss();
+        reset();
     }
     
     private void updateBuffer() {
-        mAdapter.resetLines();
-
-        try {
-            mService.reset(buffers[mBuffer].toString());
-        } catch (RemoteException e) {
-            Log.e("Logger", "Service is gone...");
-        }
-
-        mDialog.dismiss();
+        reset();
     }
 
     private void updateLog() {
@@ -335,24 +337,16 @@ public class Logger extends ListActivity {
         try {
             mService.restart(mLogType);
         } catch (RemoteException e) {
-            Log.e("Logger", "Service is gone...");
+            Log.e(TAG, "Service is gone...");
         }
 
         mDialog.dismiss();
     }
     
     private void updateFilterTag() {
-        mAdapter.resetLines();
-
-        try {
-            mService.reset(buffers[mBuffer].toString());
-        } catch (RemoteException e) {
-            Log.e("Logger", "Service is gone...");
-        }
-
-        mDialog.dismiss();
+        reset();
     }
-    
+
     private void saveResult(String msg) {
         mProgressDialog.dismiss();
 
@@ -376,7 +370,7 @@ public class Logger extends ListActivity {
         try {
             mService.write("tmp.log", mFilterTag);
         } catch (RemoteException e) {
-            Log.e("Logger", "Error generating email attachment.");
+            Log.e(TAG, "Error generating email attachment.");
         }
     }
 
@@ -384,10 +378,10 @@ public class Logger extends ListActivity {
         public void handleMessage(Message msg) {
             switch (msg.what) {
             case LogProcessor.MSG_READ_FAIL:
-                Log.d("Logger", "MSG_READ_FAIL");
+                Log.d(TAG, "MSG_READ_FAIL");
                 break;
             case LogProcessor.MSG_LOG_FAIL:
-                Log.d("Logger", "MSG_LOG_FAIL");
+                Log.d(TAG, "MSG_LOG_FAIL");
                 break;
             case LogProcessor.MSG_NEW_LINE:
                 mAdapter.addLine((String) msg.obj);
@@ -410,12 +404,12 @@ public class Logger extends ListActivity {
                 mService.run(mLogType);
                 mServiceRunning = true;
             } catch (RemoteException e) {
-                Log.e("Logger", "Could not start logging");
+                Log.e(TAG, "Could not start logging");
             }
         }
 
         public void onServiceDisconnected(ComponentName className) {
-            Log.i("Logger", "onServiceDisconnected has been called");
+            Log.i(TAG, "onServiceDisconnected has been called");
             mService = null;
         }
     };
@@ -468,7 +462,7 @@ public class Logger extends ListActivity {
                 holder.setText(line);
             }
 
-            final boolean autoscroll = 
+            final boolean autoscroll =
                     (getListView().getScrollY() + getListView().getHeight() >= getListView().getBottom()) ? true : false;
 
             if (autoscroll) {
@@ -494,7 +488,7 @@ public class Logger extends ListActivity {
             if (!mFilterTag.equals("")) {
                 String tag = line.substring(2, line.indexOf("("));
 
-                if (!mFilterTag.toLowerCase().equals(tag.toLowerCase().trim())) {
+                if (!mFilterTagLowerCase.equals(tag.toLowerCase().trim())) {
                     return;
                 }
             }
@@ -538,7 +532,7 @@ public class Logger extends ListActivity {
                 setSpan(new StyleSpan(Typeface.BOLD), 0, 1, 0);
 
                 int leftIdx;
- 
+
                 if ((leftIdx = line.indexOf(':', 2)) >= 0) {
                     setSpan(new ForegroundColorSpan(labelColor), 2, leftIdx, 0);
                     setSpan(new StyleSpan(Typeface.ITALIC), 2, leftIdx, 0);
@@ -547,7 +541,7 @@ public class Logger extends ListActivity {
                 setSpan(new ForegroundColorSpan(0xffddaacc), 0, length(), 0);
             }
         }
-    	
+
         static {
             LABEL_COLOR_MAP = new HashMap<Character, Integer>();
             LABEL_COLOR_MAP.put('V', 0xffcccccc);
