@@ -28,7 +28,6 @@ import android.content.Intent;
 import android.content.ServiceConnection;
 import android.graphics.Typeface;
 import android.net.Uri;
-import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
@@ -43,12 +42,10 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.ViewGroup.LayoutParams;
 import android.widget.BaseAdapter;
 import android.widget.EditText;
-import android.widget.LinearLayout;
+import android.widget.ListAdapter;
 import android.widget.ListView;
-import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -73,7 +70,6 @@ public class Logger extends ListActivity {
     private String mFilterTag = "";
     private String mFilterTagLowerCase = "";
     private boolean mServiceRunning = false;
-    public static int MAX_LINES = 250;
     public static final int DIALOG_FILTER_ID = 1;
     public static final int DIALOG_SAVE_ID = 2;
     public static final int DIALOG_SAVE_PROGRESS_ID = 3;
@@ -384,7 +380,7 @@ public class Logger extends ListActivity {
                 Log.d(TAG, "MSG_LOG_FAIL");
                 break;
             case LogProcessor.MSG_NEW_LINE:
-                mAdapter.addLine((String) msg.obj);
+                mAdapter.addLine((LogLine) msg.obj);
                 break;
             case LogProcessor.MSG_LOG_SAVE:
                 saveResult((String) msg.obj);
@@ -420,11 +416,11 @@ public class Logger extends ListActivity {
      */
     public class LoggerListAdapter extends BaseAdapter {
         private Context mContext;
-        private ArrayList<String> mLines;
+        private ArrayList<LogLine> mLines;
 
         public LoggerListAdapter(Context c) {
             mContext = c;
-            mLines = new ArrayList<String>();
+            mLines = new ArrayList<LogLine>();
             mInflater = (LayoutInflater) c.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
         }
 
@@ -442,7 +438,7 @@ public class Logger extends ListActivity {
 
         public View getView(int pos, View convertView, ViewGroup parent) {
             TextView holder;
-            String line = mLines.get(pos);
+            LogLine line = mLines.get(pos);
 
             if (convertView == null) {
                 //inflate the view here because there's no existing view object.
@@ -459,11 +455,11 @@ public class Logger extends ListActivity {
             if (mLogType == 0) {
                 holder.setText(new LogFormattedString(line));
             } else {
-                holder.setText(line);
+                holder.setText(line.toString());
             }
 
             final boolean autoscroll =
-                    (getListView().getScrollY() + getListView().getHeight() >= getListView().getBottom()) ? true : false;
+                    (getListView().getScrollY() + getListView().getHeight() >= getListView().getBottom());
 
             if (autoscroll) {
                 getListView().setSelection(mLines.size() - 1);
@@ -480,15 +476,13 @@ public class Logger extends ListActivity {
             return index < filters ? index : -1;
         }
 
-        public void addLine(String line) {
-            if (null == line || line.length() == 0 || indexOfLogLevel(line.charAt(0)) < mFilter) {
+        public void addLine(LogLine line) {
+            if (null == line || indexOfLogLevel(line.getLevel()) < mFilter) {
                 return;
             }
 
-            if (!mFilterTag.equals("")) {
-                String tag = line.substring(2, line.indexOf("("));
-
-                if (!mFilterTagLowerCase.equals(tag.toLowerCase().trim())) {
+            if (!mFilterTagLowerCase.equals("")) {
+                if (!mFilterTagLowerCase.equals(line.getTag().toLowerCase().trim())) {
                     return;
                 }
             }
@@ -510,19 +504,11 @@ public class Logger extends ListActivity {
     private static class LogFormattedString extends SpannableString {
         public static final HashMap<Character, Integer> LABEL_COLOR_MAP;
 
-        public LogFormattedString(String line) {
-            super(line);
+        public LogFormattedString(LogLine line) {
+            super(line.toString() + '\n');
 
             try {
-                if (line.length() < 4) {
-                    throw new RuntimeException();
-                }
-
-                if (line.charAt(1) != '/') {
-                    throw new RuntimeException();
-                }
-
-                Integer labelColor = LABEL_COLOR_MAP.get(line.charAt(0));
+                Integer labelColor = LABEL_COLOR_MAP.get(line.getLevel());
 
                 if (labelColor == null) {
                     labelColor = LABEL_COLOR_MAP.get('F');
@@ -531,12 +517,10 @@ public class Logger extends ListActivity {
                 setSpan(new ForegroundColorSpan(labelColor), 0, 1, 0);
                 setSpan(new StyleSpan(Typeface.BOLD), 0, 1, 0);
 
-                int leftIdx;
-
-                if ((leftIdx = line.indexOf(':', 2)) >= 0) {
-                    setSpan(new ForegroundColorSpan(labelColor), 2, leftIdx, 0);
-                    setSpan(new StyleSpan(Typeface.ITALIC), 2, leftIdx, 0);
-                }
+                String header = line.getHeader();
+                int headerLen = header.length();
+                setSpan(new ForegroundColorSpan(labelColor), 0, headerLen, 0);
+                setSpan(new StyleSpan(Typeface.ITALIC), 0, headerLen, 0);
             } catch (Exception e) {
                 setSpan(new ForegroundColorSpan(0xffddaacc), 0, length(), 0);
             }

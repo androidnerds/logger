@@ -31,18 +31,21 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.Vector;
 
+import com.michaelrnovak.util.logger.LogLine;
+
 public class LogProcessor extends Service {
 	public static final String TAG = "LogProcessor";
-	
+
 	private static Handler mHandler;
 	private String mFile;
 	private String mBuffer = "main";
-	private Vector<String> mScrollback;
+	private String mLogFormat = "time"; // brief | time | long
+	private Vector<LogLine> mScrollback;
 	private int mType;
 	private String mFilterTag;
 	private volatile boolean threadKill = false;
 	private volatile boolean mStatus = false;
-	public static int MAX_LINES = 250;
+	public static final int MAX_LINES = 250;
 	public static final int MSG_READ_FAIL = 1;
 	public static final int MSG_LOG_FAIL = 2;
 	public static final int MSG_NEW_LINE = 3;
@@ -52,7 +55,7 @@ public class LogProcessor extends Service {
 	@Override
 	public void onCreate() {
 		super.onCreate();
-		mScrollback = new Vector<String>();
+		mScrollback = new Vector<LogLine>();
 	}
 	
 	@Override
@@ -68,14 +71,14 @@ public class LogProcessor extends Service {
 			Log.d(TAG, "status... " + mStatus);
 		}
 	};
-	
+
 	private void runLog() {
 		Process process = null;
 		
 		try {
 			
 			if (mType == 0) {
-				process = Runtime.getRuntime().exec("/system/bin/logcat -b " + mBuffer);
+				process = Runtime.getRuntime().exec("/system/bin/logcat -v " + mLogFormat + " -b " + mBuffer);
 			} else if (mType == 1) {
 				process = Runtime.getRuntime().exec("dmesg -s 1000000");
 			}
@@ -88,21 +91,37 @@ public class LogProcessor extends Service {
 		
 		try {
 			reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-			
-			String line;
-			
+
 			while (!killRequested()) {
-				line = reader.readLine();
-				
-				logLine(line);
-				
-				if (mScrollback.size() == MAX_LINES) {
-					mScrollback.removeElementAt(0);
+				String line = reader.readLine();
+				try {
+					LogLine logLine = LogLine.fromString(line, mLogFormat);
+					if (logLine instanceof LogLine.Long) {
+						boolean emptyLine = false;
+						boolean nextLine = false;
+						do {
+							reader.mark(1024);
+							line = reader.readLine();
+							if (emptyLine && null != line && line.length() > 0 && line.charAt(0) == '[') {
+								reader.reset();
+								nextLine = true;
+							}
+							emptyLine = (null == line || line.length() == 0);
+						} while (!nextLine && ((LogLine.Long) logLine).add(line));
+					}
+//					if (logLine.getPid() == android.os.Process.myPid()) {
+						logLine(logLine);
+
+						if (mScrollback.size() >= MAX_LINES) {
+							mScrollback.removeElementAt(0);
+						}
+						mScrollback.add(logLine);
+//					}
+				} catch (Exception e) {
+					Log.e(TAG, "runLog: " + line + ";", e);
 				}
-				
-				mScrollback.add(line);
 			}
-			
+
 			Log.i(TAG, "Prepping thread for termination");
 			reader.close();
 			process.destroy();
@@ -112,7 +131,7 @@ public class LogProcessor extends Service {
 		} catch (IOException e) {
 			communicate(MSG_READ_FAIL);
 		}
-		
+
 		Log.d(TAG, "Exiting thread...");
 	}
 	
@@ -128,7 +147,7 @@ public class LogProcessor extends Service {
 		Message.obtain(mHandler, msg, "error").sendToTarget();
 	}
 	
-	private void logLine(String line) {
+	private void logLine(LogLine line) {
 		Message.obtain(mHandler, MSG_NEW_LINE, line).sendToTarget();
 	}
 	
@@ -179,7 +198,7 @@ public class LogProcessor extends Service {
 		
 		public void restart(int type) {
 			kill();
-			
+
 			run(type);
 		}
 		
@@ -209,14 +228,12 @@ public class LogProcessor extends Service {
 			File f = new File("/sdcard/" + mFile);
 			FileWriter w = new FileWriter(f);
 			final String lowerCaseFilterTag = mFilterTag.toLowerCase();
-			
+
 			for (int i = 0; i < mScrollback.size(); i++) {
-				String line = mScrollback.elementAt(i);
+				final LogLine line = mScrollback.elementAt(i);
 				
-				if (!mFilterTag.equals("")) {
-		    		String tag = line.substring(2, line.indexOf("("));
-		    		
-		    		if (lowerCaseFilterTag.equals(tag.toLowerCase().trim())) {
+				if (!lowerCaseFilterTag.equals("")) {
+					if (lowerCaseFilterTag.equals(line.getTag().toLowerCase().trim())) {
 		    			w.write(line + "\n");
 		    		}
 		    	} else {
@@ -238,7 +255,6 @@ public class LogProcessor extends Service {
 			Log.e(TAG, "Error writing the log to a file.", e);
 			Message.obtain(mHandler, MSG_LOG_SAVE, "error").sendToTarget();
 		}
-		
 	}
 
 }
