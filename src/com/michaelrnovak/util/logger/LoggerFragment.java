@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2009, 2010  Michael Novak <mike@androidnerds.org>
- * 
+ *               2015 Gavriel Fleischer <flocsy@gmail.com>
+ *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
  * as published by the Free Software Foundation; either version 2
@@ -17,7 +18,6 @@
  */
 package com.michaelrnovak.util.logger;
 
-import android.app.ListActivity;
 import android.app.AlertDialog;
 import android.app.Dialog;
 import android.app.ProgressDialog;
@@ -33,12 +33,16 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Message;
 import android.os.RemoteException;
+import android.support.annotation.Nullable;
+import android.support.v4.app.Fragment;
+import android.support.v4.app.FragmentActivity;
 import android.text.SpannableString;
 import android.text.style.ForegroundColorSpan;
 import android.text.style.StyleSpan;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.Menu;
+import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
@@ -56,8 +60,19 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
 
-public class Logger extends ListActivity {
+public class LoggerFragment extends Fragment {
     public static final String TAG = "Logger";
+    public static final int DIALOG_FILTER_ID = 1;
+    public static final int DIALOG_SAVE_ID = 2;
+    public static final int DIALOG_SAVE_PROGRESS_ID = 3;
+    public static final int DIALOG_EMAIL_ID = 4;
+    public static final int DIALOG_BUFFER_ID = 5;
+    public static final int DIALOG_TYPE_ID = 6;
+    public static final int DIALOG_TAG_ID = 7;
+    static final CharSequence[] LOG_LEVEL_NAMES = {"Verbose", "Debug", "Info", "Warn", "Error", "Fatal", "Silent"};
+    static final char[] LOG_LEVEL_CHARS = {'V', 'D', 'I', 'W', 'E', 'F', 'S'};
+    static final CharSequence[] BUFFERS = {"Main", "Radio", "Events"};
+    static final CharSequence[] TYPES = {"Logcat", "Dmesg"};
 
     private ILogProcessor mService;
     private AlertDialog mDialog;
@@ -70,41 +85,36 @@ public class Logger extends ListActivity {
     private String mFilterTag = "";
     private String mFilterTagLowerCase = "";
     private boolean mServiceRunning = false;
-    public static final int DIALOG_FILTER_ID = 1;
-    public static final int DIALOG_SAVE_ID = 2;
-    public static final int DIALOG_SAVE_PROGRESS_ID = 3;
-    public static final int DIALOG_EMAIL_ID = 4;
-    public static final int DIALOG_BUFFER_ID = 5;
-    public static final int DIALOG_TYPE_ID = 6;
-    public static final int DIALOG_TAG_ID = 7;
-    public static final int FILTER_OPTION = Menu.FIRST;
-    public static final int EMAIL_OPTION = Menu.FIRST + 1;
-    public static final int SAVE_OPTION = Menu.FIRST + 2;
-    public static final int BUFFER_OPTION = Menu.FIRST + 3;
-    public static final int TYPE_OPTION = Menu.FIRST + 4;
-    public static final int TAG_OPTION = Menu.FIRST + 5;
-    final CharSequence[] items = {"Verbose", "Debug", "Info", "Warn", "Error", "Fatal", "Silent"};
-    final char[] mFilters = {'V', 'D', 'I', 'W', 'E', 'F', 'S'};
-    final CharSequence[] buffers = {"Main", "Radio", "Events"};
-    final CharSequence[] types = {"Logcat", "Dmesg"};
+
+    private FragmentActivity fragmentActivity;
+    private ListView mListView;
 
     @Override
-    public void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.main);
+    public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
+        super.onCreateView(inflater, container, savedInstanceState);
 
-        getListView().setStackFromBottom(true);
-        getListView().setTranscriptMode(ListView.TRANSCRIPT_MODE_NORMAL);
-        getListView().setDividerHeight(0);
+        fragmentActivity = (FragmentActivity)super.getActivity();
+        setHasOptionsMenu(true);
+        return inflater.inflate(R.layout.fragment_logger, container, false);
+    }
 
-        mAdapter = new LoggerListAdapter(this);
+    @Override
+    public void onViewCreated(View view, @Nullable Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+
+        ListView listView = getListView();
+        listView.setStackFromBottom(true);
+        listView.setTranscriptMode(ListView.TRANSCRIPT_MODE_NORMAL);
+        listView.setDividerHeight(0);
+
+        mAdapter = new LoggerListAdapter(fragmentActivity);
         setListAdapter(mAdapter);
     }
 
     @Override
     public void onResume() {
         super.onResume();
-        bindService(new Intent(this, LogProcessor.class), mConnection, Context.BIND_AUTO_CREATE);
+        fragmentActivity.bindService(new Intent(fragmentActivity, LogProcessor.class), mConnection, Context.BIND_AUTO_CREATE);
 
         //TODO: make sure this actually deletes and doesn't append.
         File f = new File("/sdcard/tmp.log");
@@ -117,101 +127,98 @@ public class Logger extends ListActivity {
     @Override
     public void onPause() {
         super.onPause();
-        unbindService(mConnection);
+        fragmentActivity.unbindService(mConnection);
     }
     
     @Override
-    public boolean onPrepareOptionsMenu(Menu menu) {
-        MenuItem item = menu.getItem(0);
+    public void onPrepareOptionsMenu(Menu menu) {
+        menu.findItem(R.id.action_filter).setEnabled(mBuffer == 0);
 
-        if (mBuffer != 0) {
-            item.setEnabled(false);
-        } else {
-            item.setEnabled(true);
-        }
-
-        return super.onPrepareOptionsMenu(menu);
+        super.onPrepareOptionsMenu(menu);
     }
 
     @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        menu.add(Menu.NONE, FILTER_OPTION, 1, R.string.menu_filter).setIcon(R.drawable.ic_menu_filter)
-                .setEnabled(mBuffer == 0);
-        menu.add(Menu.NONE, TAG_OPTION, 2, R.string.menu_tag).setIcon(R.drawable.ic_menu_tag);
-        menu.add(Menu.NONE, BUFFER_OPTION, 3, R.string.menu_buffer).setIcon(android.R.drawable.ic_menu_manage);
-        menu.add(Menu.NONE, EMAIL_OPTION, 4, R.string.menu_email).setIcon(android.R.drawable.ic_menu_send);
-        menu.add(Menu.NONE, SAVE_OPTION, 5, R.string.menu_save).setIcon(android.R.drawable.ic_menu_save);
-        menu.add(Menu.NONE, TYPE_OPTION, 6, R.string.menu_select).setIcon(R.drawable.ic_menu_monitor);
-
-        return super.onCreateOptionsMenu(menu);
+    public void onCreateOptionsMenu(Menu menu, MenuInflater inflater) {
+        inflater.inflate(R.menu.menu_logger, menu);
+        super.onCreateOptionsMenu(menu, inflater);
     }
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        switch (item.getItemId()) {
-        case FILTER_OPTION:
+        int id = item.getItemId();
+        if (id == R.id.action_filter) {
             onCreateDialog(DIALOG_FILTER_ID);
-            break;
-        case EMAIL_OPTION:
+        } else if (id == R.id.action_email) {
             generateEmailMessage();
-            break;
-        case SAVE_OPTION:
+        } else if (id == R.id.action_save) {
             onCreateDialog(DIALOG_SAVE_ID);
-            break;
-        case BUFFER_OPTION:
+        } else if (id == R.id.action_buffer) {
             onCreateDialog(DIALOG_BUFFER_ID);
-            break;
-        case TYPE_OPTION:
+        } else if (id == R.id.action_select) {
             onCreateDialog(DIALOG_TYPE_ID);
-            break;
-        case TAG_OPTION:
+        } else if (id == R.id.action_tag) {
             onCreateDialog(DIALOG_TAG_ID);
-            break;
-        default:
-            break;
+        } else {
         }
-
         return false;
     }
-    
+
+    protected ListView getListView() {
+        if (mListView == null) {
+            mListView = (ListView)getView().findViewById(android.R.id.list);
+        }
+        return mListView;
+    }
+    protected void setListAdapter(ListAdapter adapter) {
+        getListView().setAdapter(adapter);
+    }
+//    protected ListAdapter getListAdapter() {
+//        ListAdapter adapter = getListView().getAdapter();
+//        if (adapter instanceof HeaderViewListAdapter) {
+//            return ((HeaderViewListAdapter)adapter).getWrappedAdapter();
+//        } else {
+//            return adapter;
+//        }
+//    }
+
     protected Dialog onCreateDialog(int id) {
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        AlertDialog.Builder builder = new AlertDialog.Builder(fragmentActivity);
 
         switch (id) {
         case DIALOG_FILTER_ID:
             builder.setTitle("Select a filter level");
-            builder.setSingleChoiceItems(items, mFilter, mClickListener);
+            builder.setSingleChoiceItems(LOG_LEVEL_NAMES, mFilter, mClickListener);
             mDialog = builder.create();
             break;
         case DIALOG_SAVE_ID:
             builder.setTitle("Enter filename:");
-            LayoutInflater inflater = (LayoutInflater) getSystemService(LAYOUT_INFLATER_SERVICE);
-            View v = inflater.inflate(R.layout.file_save, (ViewGroup) findViewById(R.id.layout_root));
+            LayoutInflater inflater = (LayoutInflater)fragmentActivity.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
+            View v = inflater.inflate(R.layout.file_save, (ViewGroup)getView().findViewById(R.id.layout_root));
             builder.setView(v);
             builder.setNegativeButton("Cancel", mButtonListener);
             builder.setPositiveButton("Save", mButtonListener);
             mDialog = builder.create();
             break;
         case DIALOG_SAVE_PROGRESS_ID:
-            mProgressDialog = ProgressDialog.show(this, "", "Saving...", true);
+            mProgressDialog = ProgressDialog.show(fragmentActivity, "", "Saving...", true);
             return mProgressDialog;
         case DIALOG_EMAIL_ID:
-            mProgressDialog = ProgressDialog.show(this, "", "Generating attachment...", true);
+            mProgressDialog = ProgressDialog.show(fragmentActivity, "", "Generating attachment...", true);
             return mProgressDialog;
         case DIALOG_BUFFER_ID:
             builder.setTitle("Select a buffer");
-            builder.setSingleChoiceItems(buffers, mBuffer, mBufferListener);
+            builder.setSingleChoiceItems(BUFFERS, mBuffer, mBufferListener);
             mDialog = builder.create();
             break;
         case DIALOG_TYPE_ID:
             builder.setTitle("Select a log");
-            builder.setSingleChoiceItems(types, mLogType, mTypeListener);
+            builder.setSingleChoiceItems(TYPES, mLogType, mTypeListener);
             mDialog = builder.create();
             break;
         case DIALOG_TAG_ID:
             builder.setTitle("Enter tag name");
-            LayoutInflater inflate = (LayoutInflater) getSystemService(LAYOUT_INFLATER_SERVICE);
-            View t = inflate.inflate(R.layout.file_save, (ViewGroup) findViewById(R.id.layout_root));
+            LayoutInflater inflate = (LayoutInflater)fragmentActivity.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
+            View t = inflate.inflate(R.layout.file_save, (ViewGroup)getView().findViewById(R.id.layout_root));
             EditText et = (EditText) t.findViewById(R.id.filename);
             et.setText(mFilterTag);
             builder.setView(t);
@@ -229,7 +236,7 @@ public class Logger extends ListActivity {
     
     DialogInterface.OnClickListener mClickListener = new DialogInterface.OnClickListener() {
         public void onClick(DialogInterface dialog, int which) {
-            if (which >= mFilters.length) {
+            if (which >= LOG_LEVEL_CHARS.length) {
                 mFilter = -1;
             } else {
                 mFilter = which;
@@ -287,7 +294,7 @@ public class Logger extends ListActivity {
     };
 
     public void stopLogging() {
-        unbindService(mConnection);
+        fragmentActivity.unbindService(mConnection);
         mServiceRunning = false;
 
         if (mServiceRunning) {
@@ -296,7 +303,7 @@ public class Logger extends ListActivity {
     }
 
     public void startLogging() {
-        bindService(new Intent(this, LogProcessor.class), mConnection, Context.BIND_AUTO_CREATE);
+        fragmentActivity.bindService(new Intent(fragmentActivity, LogProcessor.class), mConnection, Context.BIND_AUTO_CREATE);
 
         try {
             mService.run(mLogType);
@@ -310,7 +317,7 @@ public class Logger extends ListActivity {
         mAdapter.resetLines();
 
         try {
-            mService.reset(buffers[mBuffer].toString());
+            mService.reset(BUFFERS[mBuffer].toString());
         } catch (RemoteException e) {
             Log.e(TAG, "Service is gone...");
         }
@@ -347,9 +354,9 @@ public class Logger extends ListActivity {
         mProgressDialog.dismiss();
 
         if (msg.equals("error")) {
-            Toast.makeText(this, "Error while saving the log to file!", Toast.LENGTH_LONG).show();
+            Toast.makeText(fragmentActivity, "Error while saving the log to file!", Toast.LENGTH_LONG).show();
         } else if (msg.equals("saved")) {
-            Toast.makeText(this, "Log has been saved to file.", Toast.LENGTH_LONG).show();
+            Toast.makeText(fragmentActivity, "Log has been saved to file.", Toast.LENGTH_LONG).show();
         } else if (msg.equals("attachment")) {
             Intent mail = new Intent(Intent.ACTION_SEND);
             mail.setType("text/plain");
@@ -469,9 +476,9 @@ public class Logger extends ListActivity {
         }
 
         private int indexOfLogLevel(final char c) {
-            int filters = mFilters.length;
+            int filters = LOG_LEVEL_CHARS.length;
             int index = 0;
-            for (; index < filters && mFilters[index] != c; index++) {
+            for (; index < filters && LOG_LEVEL_CHARS[index] != c; index++) {
             }
             return index < filters ? index : -1;
         }

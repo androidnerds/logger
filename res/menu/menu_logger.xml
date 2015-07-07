@@ -1,0 +1,36 @@
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:context="com.michaelrnovak.util.logger.LoggerActivity">
+
+    <item android:id="@+id/action_filter"
+        android:title="@string/menu_filter"
+        android:icon="@drawable/ic_menu_filter"
+        android:orderInCategory="100"
+        app:showAsAction="never" />
+    <item android:id="@+id/action_tag"
+        android:title="@string/menu_tag"
+        android:icon="@drawable/ic_menu_tag"
+        android:orderInCategory="100"
+        app:showAsAction="never" />
+    <item android:id="@+id/action_buffer"
+        android:title="@string/menu_buffer"
+        android:orderInCategory="100"
+        app:showAsAction="never" />
+    <!--android:icon="@drawable/ic_menu_manage"-->
+    <item android:id="@+id/action_email"
+        android:title="@string/menu_email"
+        android:orderInCategory="100"
+        app:showAsAction="never" />
+    <!--android:icon="@drawable/ic_menu_send"-->
+    <item android:id="@+id/action_save"
+        android:title="@string/menu_save"
+        android:orderInCategory="100"
+        app:showAsAction="never" />
+    <!--android:icon="@drawable/ic_menu_save"-->
+    <item android:id="@+id/action_select"
+        android:title="@string/menu_select"
+        android:icon="@drawable/ic_menu_monitor"
+        android:orderInCategory="100"
+        app:showAsAction="never" />
+</menu>

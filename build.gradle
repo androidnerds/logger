@@ -9,15 +9,19 @@ description = "Android Logcat/Dmesg viewer for devices"
 sourceCompatibility = 1.7
 targetCompatibility = 1.7
 
+dependencies {
+    compile 'com.android.support:appcompat-v7:22.2.0'
+}
+
 android {
     compileSdkVersion 22
     buildToolsVersion '22.0.1'
     defaultConfig {
         applicationId "com.michaelrnovak.util.logger"
-        minSdkVersion 3
-        targetSdkVersion 3
-        versionCode 7
-        versionName "1.4"
+        minSdkVersion 7
+        targetSdkVersion 7
+        versionCode 8
+        versionName "1.5"
     }
 
     sourceSets {

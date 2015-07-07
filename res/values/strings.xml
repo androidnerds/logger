@@ -2,6 +2,8 @@
 <resources>
     <string name="app_name">Logger</string>
 
+    <string name="title_activity_logger">Logs</string>
+
     <string name="menu_filter">Filter Log</string>
     <string name="menu_tag">Filter Tag</string>
     <string name="menu_buffer">Select Buffer</string>
