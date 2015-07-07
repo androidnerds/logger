@@ -1,0 +1,31 @@
+apply plugin: 'com.android.application'
+//apply plugin: 'android-library'
+
+group = GROUP
+version = VERSION
+
+description = "Android Logcat/Dmesg viewer for devices"
+
+sourceCompatibility = 1.7
+targetCompatibility = 1.7
+
+android {
+    compileSdkVersion 22
+    buildToolsVersion '22.0.1'
+    defaultConfig {
+        applicationId "com.michaelrnovak.util.logger"
+        minSdkVersion 3
+        targetSdkVersion 3
+        versionCode 7
+        versionName "1.4"
+    }
+
+    sourceSets {
+        main {
+            manifest.srcFile 'AndroidManifest.xml'
+            java.srcDirs = ['src']
+            aidl.srcDirs = ['src']
+            res.srcDirs = ['res']
+        }
+    }
+}
