@@ -70,7 +70,7 @@ public class Logger extends ListActivity {
     private int mLogType = 0;
     private String mFilterTag = "";
     private boolean mServiceRunning = false;
-    public int MAX_LINES = 250;
+    public static int MAX_LINES = 250;
     public static final int DIALOG_FILTER_ID = 1;
     public static final int DIALOG_SAVE_ID = 2;
     public static final int DIALOG_SAVE_PROGRESS_ID = 3;
@@ -84,8 +84,8 @@ public class Logger extends ListActivity {
     public static final int BUFFER_OPTION = Menu.FIRST + 3;
     public static final int TYPE_OPTION = Menu.FIRST + 4;
     public static final int TAG_OPTION = Menu.FIRST + 5;
-    final CharSequence[] items = {"Debug", "Error", "Info", "Verbose", "Warn", "All"};
-    final char[] mFilters = {'D', 'E', 'I', 'V', 'W'};
+    final CharSequence[] items = {"Verbose", "Debug", "Info", "Warn", "Error", "Fatal", "Silent"};
+    final char[] mFilters = {'V', 'D', 'I', 'W', 'E', 'F', 'S'};
     final CharSequence[] buffers = {"Main", "Radio", "Events"};
     final CharSequence[] types = {"Logcat", "Dmesg"};
 	
@@ -230,7 +230,7 @@ public class Logger extends ListActivity {
     
     DialogInterface.OnClickListener mClickListener = new DialogInterface.OnClickListener() {
         public void onClick(DialogInterface dialog, int which) {
-            if (which == 5) {
+            if (which >= mFilters.length) {
                 mFilter = -1;
             } else {
                 mFilter = which;
@@ -478,8 +478,16 @@ public class Logger extends ListActivity {
             return convertView;
         }
 
+        private int indexOfLogLevel(final char c) {
+            int filters = mFilters.length;
+            int index = 0;
+            for (; index < filters && mFilters[index] != c; index++) {
+            }
+            return index < filters ? index : -1;
+        }
+
         public void addLine(String line) {
-            if (mFilter != -1 && line.charAt(0) != mFilters[mFilter]) {
+            if (null == line || line.length() == 0 || indexOfLogLevel(line.charAt(0)) < mFilter) {
                 return;
             }
 
@@ -523,7 +531,7 @@ public class Logger extends ListActivity {
                 Integer labelColor = LABEL_COLOR_MAP.get(line.charAt(0));
 
                 if (labelColor == null) {
-                    labelColor = LABEL_COLOR_MAP.get('E');
+                    labelColor = LABEL_COLOR_MAP.get('F');
                 }
 
                 setSpan(new ForegroundColorSpan(labelColor), 0, 1, 0);
@@ -542,11 +550,12 @@ public class Logger extends ListActivity {
     	
         static {
             LABEL_COLOR_MAP = new HashMap<Character, Integer>();
-            LABEL_COLOR_MAP.put('D', 0xff9999ff);
             LABEL_COLOR_MAP.put('V', 0xffcccccc);
+            LABEL_COLOR_MAP.put('D', 0xff9999ff);
             LABEL_COLOR_MAP.put('I', 0xffeeeeee);
-            LABEL_COLOR_MAP.put('E', 0xffff9999);
             LABEL_COLOR_MAP.put('W', 0xffffff99);
+            LABEL_COLOR_MAP.put('E', 0xffff9999);
+            LABEL_COLOR_MAP.put('F', 0xffff0000);
         }
     }
 }
