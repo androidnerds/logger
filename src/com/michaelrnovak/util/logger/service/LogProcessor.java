@@ -96,7 +96,7 @@ public class LogProcessor extends Service {
 				
 				logLine(line);
 				
-				if (mLines == MAX_LINES) {
+				if (mScrollback.size() == MAX_LINES) {
 					mScrollback.removeElementAt(0);
 				}
 				
