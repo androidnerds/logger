@@ -136,17 +136,13 @@ public class Logger extends ListActivity {
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
-        if (mBuffer == 0) {
-            menu.add(Menu.NONE, FILTER_OPTION, 1, "Filter Log").setIcon(R.drawable.ic_menu_filter);
-        } else {
-            menu.add(Menu.NONE, FILTER_OPTION, 1, "Filter Log").setIcon(R.drawable.ic_menu_filter).setEnabled(false);
-        }
-
-        menu.add(Menu.NONE, TAG_OPTION, 2, "Filter Tag").setIcon(R.drawable.ic_menu_tag);
-        menu.add(Menu.NONE, BUFFER_OPTION, 3, "Select Buffer").setIcon(android.R.drawable.ic_menu_manage);
-        menu.add(Menu.NONE, EMAIL_OPTION, 4, "Email Log").setIcon(android.R.drawable.ic_menu_send);
-        menu.add(Menu.NONE, SAVE_OPTION, 5, "Save Log").setIcon(android.R.drawable.ic_menu_save);
-        menu.add(Menu.NONE, TYPE_OPTION, 6, "Select Log").setIcon(R.drawable.ic_menu_monitor);
+        menu.add(Menu.NONE, FILTER_OPTION, 1, R.string.menu_filter).setIcon(R.drawable.ic_menu_filter)
+                .setEnabled(mBuffer == 0);
+        menu.add(Menu.NONE, TAG_OPTION, 2, R.string.menu_tag).setIcon(R.drawable.ic_menu_tag);
+        menu.add(Menu.NONE, BUFFER_OPTION, 3, R.string.menu_buffer).setIcon(android.R.drawable.ic_menu_manage);
+        menu.add(Menu.NONE, EMAIL_OPTION, 4, R.string.menu_email).setIcon(android.R.drawable.ic_menu_send);
+        menu.add(Menu.NONE, SAVE_OPTION, 5, R.string.menu_save).setIcon(android.R.drawable.ic_menu_save);
+        menu.add(Menu.NONE, TYPE_OPTION, 6, R.string.menu_select).setIcon(R.drawable.ic_menu_monitor);
 
         return super.onCreateOptionsMenu(menu);
     }
