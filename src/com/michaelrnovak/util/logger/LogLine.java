@@ -38,7 +38,7 @@ public class LogLine {
         // V/Logger( 4973): log message
         public static Brief fromString(final String line) throws ParseException {
             char level = line.charAt(0);
-            String tag = line.substring(2, line.indexOf('('));
+            String tag = line.substring(2, line.indexOf('(')).trim();
             int pid = getInt(line, tag.length() + 4, ' ', ')');
             String text = line.substring(line.indexOf(':', tag.length() + 5) + 2);
             return new Brief(level, tag, pid, text);
@@ -53,9 +53,9 @@ public class LogLine {
         //                    V/Logger( 4973): log message
         // 07-06 16:45:25.447 W/Logger( 5015): log message
         public static Time fromString(final String line) throws ParseException {
-            Date date = SIMPLE_DATE_FORMAT.parse(line.substring(0, 18));
+            Date date = parseDate(line.substring(0, 18));
             char level = line.charAt(0 + 19);
-            String tag = line.substring(2 + 19, line.indexOf('('));
+            String tag = line.substring(2 + 19, line.indexOf('(')).trim();
             int pid = getInt(line, tag.length() + 4 + 19, ' ', ')');
             String text = line.substring(line.indexOf(':', tag.length() + 5+19) + 2);
             return new Time(date, level, tag, pid, text);
@@ -78,10 +78,10 @@ public class LogLine {
 
         // [ 07-06 13:21:53.668 19517:19581 W/Logger ]\nlog message
         public static Long fromString(final String line) throws ParseException {
-            Date date = SIMPLE_DATE_FORMAT.parse(line.substring(2, 20));
+            Date date = parseDate(line.substring(2, 20));
             int pid = getInt(line, 21, ' ', ':');
             char level = line.charAt(33);
-            String tag = line.substring(35, line.length() - 2);
+            String tag = line.substring(35, line.length() - 2).trim();
             return new Long(date, pid, -1, level, tag, line);
         }
         public Long(Date date, int pid, int tid, char level, String tag) {
@@ -131,6 +131,17 @@ public class LogLine {
         final String intString = line.substring(offset, line.indexOf(after, offset));
         int integer = Integer.parseInt(intString);
         return integer;
+    }
+
+    private static Date parseDate(final String line) throws ParseException {
+        Date date = SIMPLE_DATE_FORMAT.parse(line);
+        Date now = new Date();
+        int year = now.getYear();
+        date.setYear(year);
+        if (now.getTime() < date.getTime()) {
+            date.setYear(year - 1);
+        }
+        return date;
     }
 
     protected LogLine(char level, String tag, int pid, String text) {

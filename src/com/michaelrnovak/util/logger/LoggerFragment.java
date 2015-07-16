@@ -18,9 +18,11 @@
  */
 package com.michaelrnovak.util.logger;
 
+import android.annotation.TargetApi;
 import android.app.AlertDialog;
 import android.app.Dialog;
 import android.app.ProgressDialog;
+import android.app.SearchManager;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.DialogInterface;
@@ -28,6 +30,7 @@ import android.content.Intent;
 import android.content.ServiceConnection;
 import android.graphics.Typeface;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
@@ -36,7 +39,10 @@ import android.os.RemoteException;
 import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentActivity;
+import android.support.v4.view.MenuItemCompat;
+import android.support.v7.widget.SearchView;
 import android.text.SpannableString;
+import android.text.style.BackgroundColorSpan;
 import android.text.style.ForegroundColorSpan;
 import android.text.style.StyleSpan;
 import android.util.Log;
@@ -48,6 +54,8 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
 import android.widget.EditText;
+import android.widget.Filter;
+import android.widget.Filterable;
 import android.widget.ListAdapter;
 import android.widget.ListView;
 import android.widget.TextView;
@@ -59,6 +67,7 @@ import com.michaelrnovak.util.logger.service.LogProcessor;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 
 public class LoggerFragment extends Fragment {
     public static final String TAG = "Logger";
@@ -69,21 +78,26 @@ public class LoggerFragment extends Fragment {
     public static final int DIALOG_BUFFER_ID = 5;
     public static final int DIALOG_TYPE_ID = 6;
     public static final int DIALOG_TAG_ID = 7;
+    public static final int DIALOG_APP_ID = 8;
     static final CharSequence[] LOG_LEVEL_NAMES = {"Verbose", "Debug", "Info", "Warn", "Error", "Fatal", "Silent"};
     static final char[] LOG_LEVEL_CHARS = {'V', 'D', 'I', 'W', 'E', 'F', 'S'};
-    static final CharSequence[] BUFFERS = {"Main", "Radio", "Events"};
+    public static final CharSequence[] LOG_FORMAT = {"brief", "time", "long"};
+    static final CharSequence[] BUFFERS = {"Main", "Events" /*, "Radio", "System"*/};
     static final CharSequence[] TYPES = {"Logcat", "Dmesg"};
+    static final CharSequence[] NO_YES = {"No", "Yes"};
 
     private ILogProcessor mService;
     private AlertDialog mDialog;
     private ProgressDialog mProgressDialog;
     private LoggerListAdapter mAdapter;
     private LayoutInflater mInflater;
-    private int mFilter = -1;
-    private int mBuffer = 0;
-    private int mLogType = 0;
+    private int mFilterLevel = 0;
     private String mFilterTag = "";
     private String mFilterTagLowerCase = "";
+    private int mFilterApp = 0;
+    private int mBuffer = 0;
+    private int mLogType = 0;
+    private String searchQuery = "";
     private boolean mServiceRunning = false;
 
     private FragmentActivity fragmentActivity;
@@ -132,22 +146,57 @@ public class LoggerFragment extends Fragment {
     
     @Override
     public void onPrepareOptionsMenu(Menu menu) {
-        menu.findItem(R.id.action_filter).setEnabled(mBuffer == 0);
+        menu.findItem(R.id.action_filter_loglevel).setEnabled(mBuffer == 0);
 
         super.onPrepareOptionsMenu(menu);
     }
 
+    private void search(final String query) {
+        searchQuery = query;
+        mAdapter.getFilter().filter(query);
+    }
+
+    @TargetApi(Build.VERSION_CODES.FROYO)
     @Override
     public void onCreateOptionsMenu(Menu menu, MenuInflater inflater) {
-        inflater.inflate(R.menu.menu_logger, menu);
         super.onCreateOptionsMenu(menu, inflater);
+        inflater.inflate(R.menu.menu_logger, menu);
+
+        MenuItem searchItem = menu.findItem(R.id.action_search);
+        SearchView search = (SearchView) MenuItemCompat.getActionView(searchItem);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.FROYO) {
+            SearchManager manager = (SearchManager) fragmentActivity.getSystemService(Context.SEARCH_SERVICE);
+            search.setSearchableInfo(manager.getSearchableInfo(fragmentActivity.getComponentName()));
+        }
+        search.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
+            @Override
+            public boolean onQueryTextSubmit(final String query) {
+                if (BuildConfig.DEBUG)
+                    Log.v(TAG, "onCreateOptionsMenu.onQueryTextSubmit: " + query);
+                search(query);
+                return true;
+            }
+
+            @Override
+            public boolean onQueryTextChange(final String query) {
+                if (BuildConfig.DEBUG)
+                    Log.v(TAG, "onCreateOptionsMenu.onQueryTextChange: " + query);
+                search(query);
+                return true;
+            }
+        });
     }
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         int id = item.getItemId();
-        if (id == R.id.action_filter) {
+        if (id == R.id.action_filter_loglevel) {
             onCreateDialog(DIALOG_FILTER_ID);
+        } else if (id == R.id.action_filter_tag) {
+            onCreateDialog(DIALOG_TAG_ID);
+//        } else if (id == R.id.action_filter_app) {
+//            onCreateDialog(DIALOG_APP_ID);
         } else if (id == R.id.action_email) {
             generateEmailMessage();
         } else if (id == R.id.action_save) {
@@ -156,8 +205,6 @@ public class LoggerFragment extends Fragment {
             onCreateDialog(DIALOG_BUFFER_ID);
         } else if (id == R.id.action_select) {
             onCreateDialog(DIALOG_TYPE_ID);
-        } else if (id == R.id.action_tag) {
-            onCreateDialog(DIALOG_TAG_ID);
         } else {
         }
         return false;
@@ -187,7 +234,12 @@ public class LoggerFragment extends Fragment {
         switch (id) {
         case DIALOG_FILTER_ID:
             builder.setTitle("Select a filter level");
-            builder.setSingleChoiceItems(LOG_LEVEL_NAMES, mFilter, mClickListener);
+            builder.setSingleChoiceItems(LOG_LEVEL_NAMES, mFilterLevel, mClickListener);
+            mDialog = builder.create();
+            break;
+        case DIALOG_APP_ID:
+            builder.setTitle("Filter only this app?");
+            builder.setSingleChoiceItems(NO_YES, mFilterApp, mAppListener);
             mDialog = builder.create();
             break;
         case DIALOG_SAVE_ID:
@@ -237,12 +289,19 @@ public class LoggerFragment extends Fragment {
     DialogInterface.OnClickListener mClickListener = new DialogInterface.OnClickListener() {
         public void onClick(DialogInterface dialog, int which) {
             if (which >= LOG_LEVEL_CHARS.length) {
-                mFilter = -1;
+                mFilterLevel = -1;
             } else {
-                mFilter = which;
+                mFilterLevel = which;
             }
 
             updateFilter();
+        }
+    };
+
+    DialogInterface.OnClickListener mAppListener = new DialogInterface.OnClickListener() {
+        public void onClick(DialogInterface dialog, int which) {
+            mFilterApp = which;
+            updateLog();
         }
     };
 
@@ -421,31 +480,39 @@ public class LoggerFragment extends Fragment {
      * This is the list adapter for the Logger, it holds an array of strings and adds them
      * to the list view recycling views for obvious performance reasons.
      */
-    public class LoggerListAdapter extends BaseAdapter {
+    public class LoggerListAdapter extends BaseAdapter implements Filterable {
         private Context mContext;
-        private ArrayList<LogLine> mLines;
+        private List<LogLine> mAllLines;
+        private List<LogLine> mFilteredLines;
 
         public LoggerListAdapter(Context c) {
             mContext = c;
-            mLines = new ArrayList<LogLine>();
+            mAllLines = new ArrayList<LogLine>();
+            synchronized (this) {
+                mFilteredLines = mAllLines;
+            }
             mInflater = (LayoutInflater) c.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
         }
 
-        public int getCount() {
-            return mLines.size();
+        @Override
+        synchronized public int getCount() {
+            return mFilteredLines.size();
         }
 
+        @Override
         public long getItemId(int pos) {
             return pos;
         }
 
-        public Object getItem(int pos) {
-            return mLines.get(pos);
+        @Override
+        synchronized public Object getItem(int pos) {
+            return mFilteredLines.get(pos);
         }
 
+        @Override
         public View getView(int pos, View convertView, ViewGroup parent) {
             TextView holder;
-            LogLine line = mLines.get(pos);
+            LogLine line = (LogLine)getItem(pos);
 
             if (convertView == null) {
                 //inflate the view here because there's no existing view object.
@@ -460,7 +527,7 @@ public class LoggerFragment extends Fragment {
             }
 
             if (mLogType == 0) {
-                holder.setText(new LogFormattedString(line));
+                holder.setText(new LogFormattedString(line, searchQuery));
             } else {
                 holder.setText(line.toString());
             }
@@ -469,10 +536,57 @@ public class LoggerFragment extends Fragment {
                     (getListView().getScrollY() + getListView().getHeight() >= getListView().getBottom());
 
             if (autoscroll) {
-                getListView().setSelection(mLines.size() - 1);
+                getListView().setSelection(getCount() - 1);
             }
 
             return convertView;
+        }
+
+        Filter mFilter = new Filter() {
+            @Override
+            protected Filter.FilterResults performFiltering(CharSequence constraint) {
+                Filter.FilterResults results = new Filter.FilterResults();
+                String filterSeq = constraint.toString().toLowerCase();
+                if (filterSeq != null && filterSeq.length() > 0) {
+                    List<LogLine> filteredResults = new ArrayList<>();
+                    for (LogLine line : mAllLines) {
+                        if (line.toString().toLowerCase().contains(filterSeq)) {
+                            filteredResults.add(line);
+                        }
+                    }
+                    synchronized (mAdapter) {
+                        results.values = filteredResults;
+                        results.count = filteredResults.size();
+                    }
+                    Log.v(TAG, "performFiltering1: results: " + results.count + ": " + (results.values == null ? "null" : "values"));
+                } else {
+                    synchronized (mAdapter) {
+                        results.values = mAllLines;
+                        results.count = mAllLines.size();
+                    }
+                    Log.v(TAG, "performFiltering2: results: " + results.count + ": " + (results.values == null ? "null" : "values"));
+                }
+                return results;
+            }
+
+//                @SuppressWarnings("unchecked")
+            @Override
+            protected void publishResults(CharSequence constraint, Filter.FilterResults results) {
+                // NOTE: this function is *always* called from the UI thread.
+                synchronized (mAdapter) {
+                    mFilteredLines = (List<LogLine>) results.values;
+                }
+                Log.v(TAG, "publishResults: results: " + results.count + ": " + (results.values == null ? "null" : "values"));
+                if (null == mFilteredLines) {
+                    Log.e(TAG, "publishResults: mFilteredLines: null, results: " + results.count + ": " + (results.values == null ? "null" : "values"));
+                }
+                notifyDataSetChanged();
+            }
+        };
+
+        @Override
+        public Filter getFilter() {
+            return mFilter;
         }
 
         private int indexOfLogLevel(final char c) {
@@ -484,7 +598,11 @@ public class LoggerFragment extends Fragment {
         }
 
         public void addLine(LogLine line) {
-            if (null == line || indexOfLogLevel(line.getLevel()) < mFilter) {
+            if (null == line || indexOfLogLevel(line.getLevel()) < mFilterLevel) {
+                return;
+            }
+
+            if (mFilterApp == 1 && line.getPid() != android.os.Process.myPid()) {
                 return;
             }
 
@@ -494,12 +612,12 @@ public class LoggerFragment extends Fragment {
                 }
             }
 
-            mLines.add(line);
+            mAllLines.add(line);
             notifyDataSetChanged();
         }
  
         public void resetLines() {
-            mLines.clear();
+            mAllLines.clear();
             notifyDataSetChanged();
         }
 
@@ -511,8 +629,8 @@ public class LoggerFragment extends Fragment {
     private static class LogFormattedString extends SpannableString {
         public static final HashMap<Character, Integer> LABEL_COLOR_MAP;
 
-        public LogFormattedString(LogLine line) {
-            super(line.toString() + '\n');
+        public LogFormattedString(LogLine line, String searchQuery) {
+            super(line.toString());
 
             try {
                 Integer labelColor = LABEL_COLOR_MAP.get(line.getLevel());
@@ -528,8 +646,18 @@ public class LoggerFragment extends Fragment {
                 int headerLen = header.length();
                 setSpan(new ForegroundColorSpan(labelColor), 0, headerLen, 0);
                 setSpan(new StyleSpan(Typeface.ITALIC), 0, headerLen, 0);
+
+                if (null != searchQuery && searchQuery.length() > 0) {
+                    final String str = line.toString();
+                    int start = str.toLowerCase().indexOf(searchQuery.toLowerCase());
+                    if (start > -1) {
+                        setSpan(new ForegroundColorSpan(LABEL_COLOR_MAP.get('q')), start, start + searchQuery.length(), 0);
+                        setSpan(new BackgroundColorSpan(LABEL_COLOR_MAP.get('Q')), start, start + searchQuery.length(), 0);
+                        setSpan(new StyleSpan(Typeface.BOLD), start, start + searchQuery.length(), 0);
+                    }
+                }
             } catch (Exception e) {
-                setSpan(new ForegroundColorSpan(0xffddaacc), 0, length(), 0);
+                setSpan(new ForegroundColorSpan(LABEL_COLOR_MAP.get('e')), 0, length(), 0);
             }
         }
 
@@ -541,6 +669,10 @@ public class LoggerFragment extends Fragment {
             LABEL_COLOR_MAP.put('W', 0xffffff99);
             LABEL_COLOR_MAP.put('E', 0xffff9999);
             LABEL_COLOR_MAP.put('F', 0xffff0000);
+
+            LABEL_COLOR_MAP.put('e', 0xffddaacc); // for exception foreground
+            LABEL_COLOR_MAP.put('q', 0xffffffff); // for search query foreground
+            LABEL_COLOR_MAP.put('Q', 0xffff9999); // for search query background
         }
     }
 }
