@@ -1,5 +1,6 @@
 bin/
 gen/
+build/
 local.properties
 .DS_STORE
 *.swp

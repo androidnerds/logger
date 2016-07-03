@@ -1,5 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="hello">Hello World, Logger!</string>
     <string name="app_name">Logger</string>
+
+    <string name="title_activity_logger">Logs</string>
+
+    <string name="menu_search_label">Search</string>
+    <string name="menu_filter_loglevel">Filter by loglevel</string>
+    <string name="menu_filter_tag">Filter by tag</string>
+    <string name="menu_filter_app">Filter by app</string>
+    <string name="menu_log_format">Log format</string>
+    <string name="menu_buffer">Select Buffer</string>
+    <string name="menu_email">Email Log</string>
+    <string name="menu_save">Save Log</string>
+    <string name="menu_select">Select Log</string>
 </resources>
