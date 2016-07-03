@@ -1,5 +1,4 @@
-apply plugin: 'com.android.application'
-//apply plugin: 'android-library'
+apply plugin: 'android-library'
 
 group = GROUP
 version = VERSION
@@ -10,14 +9,13 @@ sourceCompatibility = 1.7
 targetCompatibility = 1.7
 
 dependencies {
-    compile 'com.android.support:appcompat-v7:22.2.0'
+    compile 'com.android.support:appcompat-v7:23.2.0'
 }
 
 android {
-    compileSdkVersion 22
-    buildToolsVersion '22.0.1'
+    buildToolsVersion "23.0.3"
+    compileSdkVersion 23
     defaultConfig {
-        applicationId "com.michaelrnovak.util.logger"
         minSdkVersion 7
         targetSdkVersion 7
         versionCode 8
