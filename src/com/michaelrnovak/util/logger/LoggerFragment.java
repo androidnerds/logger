@@ -481,17 +481,15 @@ public class LoggerFragment extends Fragment {
      * to the list view recycling views for obvious performance reasons.
      */
     public class LoggerListAdapter extends BaseAdapter implements Filterable {
-        private Context mContext;
         private List<LogLine> mAllLines;
         private List<LogLine> mFilteredLines;
 
-        public LoggerListAdapter(Context c) {
-            mContext = c;
+        public LoggerListAdapter(final Context context) {
             mAllLines = new ArrayList<LogLine>();
             synchronized (this) {
                 mFilteredLines = mAllLines;
             }
-            mInflater = (LayoutInflater) c.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
+            mInflater = (LayoutInflater) context.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
         }
 
         @Override
@@ -544,23 +542,23 @@ public class LoggerFragment extends Fragment {
 
         Filter mFilter = new Filter() {
             @Override
-            protected Filter.FilterResults performFiltering(CharSequence constraint) {
-                Filter.FilterResults results = new Filter.FilterResults();
-                String filterSeq = constraint.toString().toLowerCase();
+            protected Filter.FilterResults performFiltering(final CharSequence constraint) {
+                final Filter.FilterResults results = new Filter.FilterResults();
+                final String filterSeq = constraint.toString().toLowerCase();
                 if (filterSeq != null && filterSeq.length() > 0) {
-                    List<LogLine> filteredResults = new ArrayList<>();
-                    for (LogLine line : mAllLines) {
+                    final List<LogLine> filteredResults = new ArrayList<>();
+                    for (final LogLine line : mAllLines) {
                         if (line.toString().toLowerCase().contains(filterSeq)) {
                             filteredResults.add(line);
                         }
                     }
-                    synchronized (mAdapter) {
+                    synchronized (LoggerListAdapter.this) {
                         results.values = filteredResults;
                         results.count = filteredResults.size();
                     }
                     Log.v(TAG, "performFiltering1: results: " + results.count + ": " + (results.values == null ? "null" : "values"));
                 } else {
-                    synchronized (mAdapter) {
+                    synchronized (LoggerListAdapter.this) {
                         results.values = mAllLines;
                         results.count = mAllLines.size();
                     }
@@ -571,14 +569,14 @@ public class LoggerFragment extends Fragment {
 
 //                @SuppressWarnings("unchecked")
             @Override
-            protected void publishResults(CharSequence constraint, Filter.FilterResults results) {
+            protected void publishResults(final CharSequence constraint, final Filter.FilterResults results) {
                 // NOTE: this function is *always* called from the UI thread.
-                synchronized (mAdapter) {
+                synchronized (LoggerListAdapter.this) {
                     mFilteredLines = (List<LogLine>) results.values;
-                }
-                Log.v(TAG, "publishResults: results: " + results.count + ": " + (results.values == null ? "null" : "values"));
-                if (null == mFilteredLines) {
-                    Log.e(TAG, "publishResults: mFilteredLines: null, results: " + results.count + ": " + (results.values == null ? "null" : "values"));
+                    Log.v(TAG, "publishResults: results: " + results.count + ": " + (results.values == null ? "null" : "values"));
+                    if (null == mFilteredLines) {
+                        Log.e(TAG, "publishResults: mFilteredLines: null, results: " + results.count + ": " + (results.values == null ? "null" : "values"));
+                    }
                 }
                 notifyDataSetChanged();
             }

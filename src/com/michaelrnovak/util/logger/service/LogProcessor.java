@@ -34,6 +34,8 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Vector;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -47,8 +49,10 @@ public class LogProcessor extends Service {
 	public static final int MSG_READ_FAIL = 1;
 	public static final int MSG_LOG_FAIL = 2;
 	public static final int MSG_NEW_LINE = 3;
-	public static final int MSG_RESET_LOG = 4;
+//	public static final int MSG_RESET_LOG = 4;
 	public static final int MSG_LOG_SAVE = 5;
+	static final ArrayList<String> HIDDEN_TAGS = new ArrayList<String>(Arrays.asList(new String[]{
+			HIDDEN_TAG,"GAV4", "art", "System.out"}));
 
 	private static Handler mHandler;
 
@@ -122,7 +126,7 @@ public class LogProcessor extends Service {
 								emptyLine = (null == line || line.length() == 0);
 							} while (!nextLine && ((LogLine.Long) logLine).add(line));
 						}
-						if (!HIDDEN_TAG.equals(logLine.getTag())) {
+						if (!HIDDEN_TAGS.contains(logLine.getTag())) {
 							logLine(logLine);
 							if (mScrollback.size() >= MAX_LINES) {
 								mScrollback.removeElementAt(0);
@@ -158,7 +162,6 @@ public class LogProcessor extends Service {
 
 	Runnable worker = new Runnable() {
 		public void run() {
-			Log.d(TAG, "before syncronized worker");
 			synchronized (mStatus) {
 				mStatus.set(false);
 			}
@@ -170,7 +173,6 @@ public class LogProcessor extends Service {
 				mStatus.set(true);
 				mStatus.notify();
 			}
-			Log.d(TAG, "after syncronized worker");
 		}
 	};
 
